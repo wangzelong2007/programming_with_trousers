@@ -1,0 +1,6 @@
+There is a problem with Tspi_TPM_CMKCreateTicket().
+
+DBG output : unsupported key parameters
+
+I don't know how to solve this problem
+
