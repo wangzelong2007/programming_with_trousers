@@ -17,6 +17,16 @@
 
 #define SIGN_KEY_UUID {0,0,0,0,0,{0,0,0,2,11}}
 
+UINT32 filelength(char *filename)
+{
+	struct stat st;
+	if(filename != NULL)
+	{
+		stat(filename, &st);
+		return st.st_size;
+	}
+}
+
 int main(int argc, char **argv)
 {
 	
@@ -35,7 +45,7 @@ int main(int argc, char **argv)
 	TSS_FLAG initFlags;
 	BYTE *pubKey;
 	UINT32 pubKeySize;
-	FILE *fout;
+	FILE *fout, *fin;
 
 	result =Tspi_Context_Create(&hContext);
 	DBG("Create a context", result);
@@ -50,6 +60,8 @@ int main(int argc, char **argv)
 	result=Tspi_Policy_SetSecret(hSRKPolicy,TSS_SECRET_MODE_SHA1, 20, wks);
 	DBG("Tspi_Policy_SetSecret", result);
 
+
+	// Create a signing key
 	result = Tspi_Context_CreateObject(hContext, TSS_OBJECT_TYPE_POLICY,
 			TSS_POLICY_USAGE, &hSigning_Key_Policy);
 	DBG("Create policy object", result);
@@ -101,6 +113,39 @@ int main(int argc, char **argv)
 	result = Tspi_Policy_FlushSecret(hSigning_Key_Policy);
 	DBG("Policy flush secret", result);
 
+	//Load key by UUID and Sign Data
+	TSS_HHASH hHashToSign = 0;
+	result = Tspi_Context_GetKeyByUUID(hContext,
+					TSS_PS_TYPE_SYSTEM,
+					MY_UUID,
+					&hSigning_Key);
+	DBG("Get key by UUID", result);
+	result = Tspi_Key_LoadKey(hSigning_Key,hSRK);
+	DBG("Load private key", result);
+	result = Tspi_Context_CreateObject(hContext,
+				TSS_OBJECT_TYPE_HASH,
+				TSS_HASH_SHA1,
+				&hHashToSign);
+	DBG("Create Hash Object", result);
+	//Read in a file to hash
+	UINT32 pubKeyLength;
+	BYTE pPubKey[284];
+	UINT32 ulSignatureLength;
+	BYTE *rgbSignature;
+	pubKeyLength = filelength("SigningKey.pub");
+	fin = fopen("SigningKey.pub", "rb");
+	read(fileno(fin), pPubKey, pubKeyLength);
+	fclose(fin);
+	result = Tspi_Hash_UpdateHashValue(hHashToSign,
+					pubKeyLength, pPubKey);
+	DBG("Hash the public key", result);
+	result = Tspi_Hash_Sign(hHashToSign,hSigning_Key,
+				&ulSignatureLength,
+				&rgbSignature);
+	DBG("Sign", result);	
+	//Write the signature to a file
+
+	//Unregister the key if necessary
 	result = Tspi_Context_GetKeyByUUID(hContext,
 					TSS_PS_TYPE_SYSTEM,
 					MY_UUID,
